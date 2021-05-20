@@ -27,7 +27,9 @@ final class GpsTransportFactory implements TransportFactoryInterface
     public function createTransport(string $dsn, array $options, SerializerInterface $serializer): TransportInterface
     {
         return new GpsTransport(
-            new PubSubClient(),
+            new PubSubClient([
+                'projectId' => getenv('GCLOUD_PROJECT')
+            ]),
             $this->gpsConfigurationResolver->resolve($dsn, $options),
             $serializer
         );
