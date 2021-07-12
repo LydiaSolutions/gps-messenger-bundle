@@ -49,6 +49,8 @@ final class GpsReceiver implements ReceiverInterface
             foreach ($messages as $message) {
                 yield $this->createEnvelopeFromPubSubMessage($message);
             }
+        } catch (MessageDecodingFailedException $messageDecodingFailedException) {
+            // Do nothing.
         } catch (Throwable $exception) {
             throw new TransportException($exception->getMessage(), 0, $exception);
         }
