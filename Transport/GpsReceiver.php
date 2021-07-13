@@ -118,7 +118,8 @@ final class GpsReceiver implements ReceiverInterface
         }
 
         try {
-            $envelope = $this->serializer->decode($rawData);
+            $messageBody = ['body' => $rawData, 'attributes' => $message->attributes() ?? []];
+            $envelope = $this->serializer->decode($messageBody);
         } catch (MessageDecodingFailedException $exception) {
             throw $exception;
         }
