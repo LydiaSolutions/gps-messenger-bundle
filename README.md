@@ -1,73 +1,44 @@
-Google Pub/Sub transport implementation for Symfony Messenger
-========
+# Google Pub/Sub transport for Symfony Messenger
 
-This bundle provides a simple implementation of Google Pub/Sub transport for Symfony Messenger.
+This bundle lets Symfony applications publish Messenger messages to Google Pub/Sub and receive them through subscriptions. It integrates transport configuration, publishing, polling and acknowledgement with Messenger, and supports ordering keys and Pub/Sub-managed redelivery.
 
-The bundle requires only `symfony/messenger`, `google/cloud-pubsub` and `symfony/options-resolver` packages. 
-In contrast with [Enqueue GPS transport](https://github.com/php-enqueue/gps),
-it doesn't require [Enqueue](https://github.com/php-enqueue) 
-and [some bridge](https://github.com/sroze/messenger-enqueue-transport#readme). 
-It supports ordering messages with `OrderingKeyStamp` and it's not outdated. 
+It uses Symfony Messenger, Symfony OptionsResolver and the [Google Cloud Pub/Sub SDK](https://github.com/googleapis/google-cloud-php-pubsub) directly. Unlike the [Enqueue GPS transport](https://github.com/php-enqueue/gps), it requires neither [Enqueue](https://github.com/php-enqueue) nor a [Messenger–Enqueue bridge](https://github.com/sroze/messenger-enqueue-transport#readme).
 
-## Installation
+## Getting started
 
-### Step 1: Install the Bundle
+From the consuming Symfony application, run `composer require petitpress/gps-messenger-bundle --no-scripts` to install the bundle while skipping Composer scripts. Enable the bundle in that application. Consult the [dependency requirements](composer.json) for PHP and package compatibility and the [bundle integration](GpsMessengerBundle.php) for the registration entry point.
 
-From within container execute the following command to download the latest version of the bundle:
+Prepare an accessible Pub/Sub topic and a subscription attached to it. The transport publishes and consumes messages; it does not provision these resources.
 
-```console
-$ composer require petitpress/gps-messenger-bundle --no-scripts
-```
+Make Google configuration available to the PHP process: `GCLOUD_PROJECT` identifies the project, and `GOOGLE_APPLICATION_CREDENTIALS` points to a credentials file when using file-based authentication. For local development with an installed Pub/Sub emulator, configure `PUBSUB_EMULATOR_HOST` (the original local example is `http://localhost:8538`; use the address of your emulator). If Symfony DotEnv supplies these variables, use its `usePutenv()` support so they are accessible through `getenv()`.
 
-### Step 2: Configure environment variables
+Configure a Messenger transport in the consuming application:
 
-Official [Google Cloud PubSub SDK](https://github.com/googleapis/google-cloud-php-pubsub) 
-requires some globally accessible environment variables.
-
-You might need to change default Symfony DotEnv instance to use `putenv` 
-as Google needs to access some variables through `getenv`. To do so, use putenv method in `config/bootstrap.php`:
-```php
-(new Dotenv())->usePutenv()->...
-```
-
-List of Google Pub/Sub configurable variables :
-```dotenv
-# use these for production environemnt:
-GOOGLE_APPLICATION_CREDENTIALS='google-pubsub-credentials.json'
-GCLOUD_PROJECT='project-id'
-
-# use these for development environemnt (if you have installed Pub/Sub emulator):
-PUBSUB_EMULATOR_HOST=http://localhost:8538
-```
-
-### Step 3: Configure Symfony Messenger
 ```yaml
-# config/packages/messenger.yaml
-
 framework:
     messenger:
         transports:
             gps_transport:
-                dsn: 'gps://default'
+                dsn: 'gps://default/messages'
                 options:
-                    max_messages_pull: 10 # optional (default: 10)
-                    topic: # optional (default name: messages)
-                        name: 'messages'
-                    queue: # optional (default the same as topic.name)
-                        name: 'messages'
-```
-or:
-```yaml
-# config/packages/messenger.yaml
-
-framework:
-    messenger:
-        transports:
-            gps_transport:
-                dsn: 'gps://default/messages?max_messages_pull=10'
+                    queue:
+                        name: 'messages-subscription'
 ```
 
-### Step 4: Use available stamps if needed
+The DSN path selects the publishing topic; `queue.name` selects the receiving subscription. Alternatively, set the topic through `topic.name`. Pull batch size is configurable through `max_messages_pull`, including as a DSN query parameter. Explicit transport options override DSN options; see the [configuration rules](Transport/GpsConfigurationResolver.php).
 
-* `OrderingKeyStamp`: use for keeping messages of the same context in order. 
-  For more information, read an [official documentation](https://cloud.google.com/pubsub/docs/publisher#using_ordering_keys). 
+Route application messages to this transport and use the application's Messenger workers to consume them. Configure serialization consistently with the producer and consumer, then verify delivery and handling against your prepared topic and subscription.
+
+## Delivery behavior
+
+Attach `OrderingKeyStamp` to outgoing envelopes when related messages need a shared ordering key; follow Google's [ordering guidance](https://cloud.google.com/pubsub/docs/publisher#using_ordering_keys).
+
+The receiver retains the native Pub/Sub message for acknowledgement. Rejection releases it for redelivery, while the sender avoids republishing Messenger redeliveries. Configure the subscription retry policy accordingly.
+
+## Development
+
+With development dependencies installed, run `vendor/bin/phpunit` from the repository root. Unit tests cover publishing, ordering keys, suppression of republishing and rejection behavior using mocked Pub/Sub collaborators. The [CI checks](.github/workflows/php.yml) also validate package metadata, coding style and static analysis.
+
+## License
+
+[MIT license](LICENSE), copyright (c) 2018–2020 Petit Press, a.s.
